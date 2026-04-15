@@ -64,7 +64,7 @@ export default function App() {
     server: 0,
     isGameOver: false,
     winner: null,
-    gameMode: 'padel', // Default, but will show selection if needed
+    gameMode: 'padel',
   });
 
   const [isModeSelected, setIsModeSelected] = useState(false);
@@ -82,8 +82,6 @@ export default function App() {
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const isRemoteUpdate = useRef(false);
-
   // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -93,17 +91,15 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Firestore Sync Listener
+  // Firestore Sync Listener - The Single Source of Truth
   useEffect(() => {
     if (!matchCode || !user) return;
 
     const unsubscribe = onSnapshot(doc(db, 'matches', matchCode), (snapshot) => {
-      // Ignore updates that originated locally to prevent loops and UI flickering
-      if (snapshot.metadata.hasPendingWrites) return;
-
       if (snapshot.exists()) {
         const data = snapshot.data();
         
+        // Update all state from the database snapshot
         setState({
           points: data.points,
           games: data.games,
@@ -123,7 +119,20 @@ export default function App() {
       handleFirestoreError(error, OperationType.GET, `matches/${matchCode}`);
     });
 
-    return () => unsubscribe();
+    // Also sync finished matches for this user/match
+    const finishedUnsubscribe = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.finishedMatches) {
+          setFinishedMatches(data.finishedMatches);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      finishedUnsubscribe();
+    };
   }, [matchCode, user]);
 
   // Sync Local State to Firestore
@@ -146,8 +155,10 @@ export default function App() {
     }
   }, [matchCode, user]);
 
-  // Save state to history before update
+  // Entry point for all state changes - Syncs to DB, UI updates via onSnapshot
   const updateState = (newState: MatchState) => {
+    // We still update locally for immediate feedback (optimistic UI)
+    // but the database remains the final authority
     setHistory((prev) => [...prev, state]);
     setState(newState);
     syncToFirestore(newState, teamNames, bestOf, goldenPoint);
@@ -333,7 +344,7 @@ export default function App() {
       newState.isGameOver = true;
       newState.winner = teamIndex;
       
-      // Save to finished matches
+      // Save to finished matches in Firestore
       const finishedMatch: FinishedMatch = {
         id: Date.now().toString(),
         date: new Date().toLocaleString('pt-BR'),
@@ -342,7 +353,13 @@ export default function App() {
         setHistory: [...newState.setHistory],
         winner: teamIndex,
       };
-      setFinishedMatches(prev => [finishedMatch, ...prev]);
+      
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        setDoc(userRef, {
+          finishedMatches: [finishedMatch, ...finishedMatches]
+        }, { merge: true });
+      }
 
       confetti({
         particleCount: 150,
