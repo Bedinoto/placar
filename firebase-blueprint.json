@@ -1,0 +1,30 @@
+{
+  "entities": {
+    "Match": {
+      "title": "Match",
+      "description": "The full state of a Padel or Beach Tennis match.",
+      "type": "object",
+      "properties": {
+        "points": { "type": "array", "description": "Current points for both teams" },
+        "games": { "type": "array", "description": "Current games for both teams" },
+        "sets": { "type": "array", "description": "Current sets for both teams" },
+        "setHistory": { "type": "array", "description": "History of finished sets" },
+        "server": { "type": "number", "description": "Index of the serving team (0 or 1)" },
+        "isGameOver": { "type": "boolean", "description": "Whether the match has finished" },
+        "winner": { "type": "number", "description": "Index of the winning team" },
+        "gameMode": { "type": "string", "description": "padel or beach" },
+        "teamNames": { "type": "array", "description": "Names of the two teams" },
+        "bestOf": { "type": "number", "description": "Number of sets (1, 3, 5)" },
+        "goldenPoint": { "type": "boolean", "description": "Whether golden point rule is active" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["points", "games", "sets", "gameMode", "teamNames"]
+    }
+  },
+  "firestore": {
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Active and finished matches indexed by a short code or ID."
+    }
+  }
+}
