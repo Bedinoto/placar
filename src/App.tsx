@@ -25,11 +25,16 @@ import {
 
 type Score = 0 | 15 | 30 | 40 | 'AD';
 
+interface SetScore {
+  t1: number;
+  t2: number;
+}
+
 interface MatchState {
   points: [Score, Score];
   games: [number, number];
   sets: [number, number];
-  setHistory: [number, number][];
+  setHistory: SetScore[];
   server: 0 | 1;
   isGameOver: boolean;
   winner: 0 | 1 | null;
@@ -43,7 +48,7 @@ interface FinishedMatch {
   date: string;
   teamNames: [string, string];
   sets: [number, number];
-  setHistory: [number, number][];
+  setHistory: SetScore[];
   winner: 0 | 1;
 }
 
@@ -99,11 +104,14 @@ export default function App() {
     if (!matchCode || !user) return;
 
     const unsubscribe = onSnapshot(doc(db, 'matches', matchCode), (snapshot) => {
+      // Ignore updates that originated locally to prevent loops and UI flickering
+      // This ensures we only react to changes from OTHER devices
+      if (snapshot.metadata.hasPendingWrites) return;
+
       if (snapshot.exists()) {
         const data = snapshot.data();
         
         // Update all state from the database snapshot
-        // We don't filter by hasPendingWrites here to ensure we always match the server
         setState({
           points: data.points,
           games: data.games,
@@ -341,7 +349,7 @@ export default function App() {
       ...currentState,
       games: [0, 0] as [number, number],
       sets: [...currentState.sets] as [number, number],
-      setHistory: [...(currentState.setHistory || []), [...currentState.games] as [number, number]],
+      setHistory: [...(currentState.setHistory || []), { t1: currentState.games[0], t2: currentState.games[1] }],
     };
 
     newState.sets[teamIndex]++;
@@ -507,9 +515,9 @@ export default function App() {
           <div className="flex gap-2">
             {state.setHistory.map((set, i) => (
               <div key={i} className="flex gap-1 bg-white/5 px-2 py-1 rounded text-xs font-mono">
-                <span className={set[0] > set[1] ? '' : 'text-white/40'} style={{ color: set[0] > set[1] ? themeColor : undefined }}>{set[0]}</span>
+                <span className={set.t1 > set.t2 ? '' : 'text-white/40'} style={{ color: set.t1 > set.t2 ? themeColor : undefined }}>{set.t1}</span>
                 <span className="text-white/20">|</span>
-                <span className={set[1] > set[0] ? '' : 'text-white/40'} style={{ color: set[1] > set[0] ? themeColor : undefined }}>{set[1]}</span>
+                <span className={set.t2 > set.t1 ? '' : 'text-white/40'} style={{ color: set.t2 > set.t1 ? themeColor : undefined }}>{set.t2}</span>
               </div>
             ))}
           </div>
@@ -865,9 +873,9 @@ export default function App() {
                       <div className="flex gap-2 pt-2 border-t border-white/5">
                         {match.setHistory.map((set, i) => (
                           <div key={i} className="bg-black/40 px-2 py-1 rounded text-[10px] font-mono flex gap-1">
-                            <span style={{ color: set[0] > set[1] ? themeColor : 'rgba(255,255,255,0.4)' }}>{set[0]}</span>
+                            <span style={{ color: set.t1 > set.t2 ? themeColor : 'rgba(255,255,255,0.4)' }}>{set.t1}</span>
                             <span className="text-white/10">|</span>
-                            <span style={{ color: set[1] > set[0] ? themeColor : 'rgba(255,255,255,0.4)' }}>{set[1]}</span>
+                            <span style={{ color: set.t2 > set.t1 ? themeColor : 'rgba(255,255,255,0.4)' }}>{set.t2}</span>
                           </div>
                         ))}
                       </div>
