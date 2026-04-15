@@ -45,7 +45,9 @@ service cloud.firestore {
              data.isGameOver is bool &&
              data.goldenPoint is bool &&
              data.server in [0, 1] &&
-             (data.winner == null || data.winner in [0, 1]);
+             (data.winner == null || data.winner in [0, 1]) &&
+             (data.createdByEmail == null || data.createdByEmail is string) &&
+             (data.createdById == null || data.createdById is string);
     }
 
     function isAdmin() {

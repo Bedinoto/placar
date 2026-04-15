@@ -34,6 +34,8 @@ interface MatchState {
   isGameOver: boolean;
   winner: 0 | 1 | null;
   gameMode: 'padel' | 'beach';
+  createdByEmail?: string;
+  createdById?: string;
 }
 
 interface FinishedMatch {
@@ -97,14 +99,11 @@ export default function App() {
     if (!matchCode || !user) return;
 
     const unsubscribe = onSnapshot(doc(db, 'matches', matchCode), (snapshot) => {
-      // Ignore updates that originated locally to prevent loops and UI flickering
-      // This ensures we only react to changes from OTHER devices
-      if (snapshot.metadata.hasPendingWrites) return;
-
       if (snapshot.exists()) {
         const data = snapshot.data();
         
         // Update all state from the database snapshot
+        // We don't filter by hasPendingWrites here to ensure we always match the server
         setState({
           points: data.points,
           games: data.games,
@@ -114,6 +113,8 @@ export default function App() {
           isGameOver: data.isGameOver,
           winner: data.winner ?? null,
           gameMode: data.gameMode,
+          createdByEmail: data.createdByEmail,
+          createdById: data.createdById,
         });
         setTeamNames(data.teamNames);
         setBestOf(data.bestOf);
@@ -160,9 +161,9 @@ export default function App() {
     }
   }, [matchCode, user]);
 
-  // Entry point for all state changes - Syncs to DB, UI updates via onSnapshot
+  // Entry point for all state changes - Syncs to DB
   const updateState = (newState: MatchState) => {
-    // We still update locally for immediate feedback (optimistic UI)
+    // We update locally for immediate feedback (optimistic UI)
     // but the database remains the final authority
     setHistory((prev) => [...prev, state]);
     setState(newState);
@@ -193,6 +194,8 @@ export default function App() {
       teamNames,
       bestOf,
       goldenPoint,
+      createdByEmail: user.email,
+      createdById: user.uid,
     };
 
     try {
@@ -495,6 +498,12 @@ export default function App() {
             <Users size={12} className="text-white/40" />
             <span className="text-[10px] font-black tracking-widest text-white/60">{matchCode}</span>
           </div>
+          {state.createdByEmail && (
+            <div className="hidden sm:flex items-center gap-1 text-[10px] text-white/20 uppercase tracking-widest">
+              <span>Iniciado por:</span>
+              <span className="font-bold">{state.createdByEmail.split('@')[0]}</span>
+            </div>
+          )}
           <div className="flex gap-2">
             {state.setHistory.map((set, i) => (
               <div key={i} className="flex gap-1 bg-white/5 px-2 py-1 rounded text-xs font-mono">
