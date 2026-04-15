@@ -570,8 +570,8 @@ export default function App() {
             } hover:bg-white/[0.02]`}
           >
             {/* Server Indicator */}
-            <div className="absolute top-8 flex flex-col items-center gap-2">
-               <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/40">{teamNames[teamIndex]}</span>
+            <div className="absolute top-6 flex flex-col items-center gap-2">
+               <span className="text-sm uppercase tracking-[0.3em] font-black italic text-white/60">{teamNames[teamIndex]}</span>
                {state.server === teamIndex && !state.isGameOver && (
                  <motion.div 
                    layoutId="server"
