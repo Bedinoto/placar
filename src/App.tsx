@@ -98,9 +98,11 @@ export default function App() {
     if (!matchCode || !user) return;
 
     const unsubscribe = onSnapshot(doc(db, 'matches', matchCode), (snapshot) => {
+      // Ignore updates that originated locally to prevent loops and UI flickering
+      if (snapshot.metadata.hasPendingWrites) return;
+
       if (snapshot.exists()) {
         const data = snapshot.data();
-        isRemoteUpdate.current = true;
         
         setState({
           points: data.points,
@@ -116,10 +118,6 @@ export default function App() {
         setBestOf(data.bestOf);
         setGoldenPoint(data.goldenPoint);
         setIsModeSelected(true);
-        
-        setTimeout(() => {
-          isRemoteUpdate.current = false;
-        }, 100);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `matches/${matchCode}`);
@@ -130,7 +128,7 @@ export default function App() {
 
   // Sync Local State to Firestore
   const syncToFirestore = useCallback(async (newState: MatchState, names: [string, string], bOf: number, gPoint: boolean) => {
-    if (!matchCode || !user || isRemoteUpdate.current) return;
+    if (!matchCode || !user) return;
 
     setIsSyncing(true);
     try {
@@ -757,7 +755,10 @@ export default function App() {
                 </button>
 
                 <button 
-                  onClick={() => setShowSettings(false)}
+                  onClick={() => {
+                    setShowSettings(false);
+                    syncToFirestore(state, teamNames, bestOf, goldenPoint);
+                  }}
                   className="w-full py-5 bg-white text-black font-black uppercase italic tracking-tighter rounded-2xl transition-colors flex items-center justify-center gap-2 hover:opacity-90"
                   style={{ backgroundColor: 'white' }}
                 >
