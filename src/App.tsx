@@ -585,14 +585,14 @@ export default function App() {
             </div>
 
             {/* Sets & Games */}
-            <div className="absolute top-24 flex gap-8 items-center">
+            <div className="absolute top-24 flex gap-10 items-center">
               <div className="flex flex-col items-center">
-                <span className="text-[10px] uppercase tracking-widest text-white/30 mb-1">Sets</span>
-                <span className="text-4xl font-black italic">{state.sets[teamIndex]}</span>
+                <span className="text-xs uppercase tracking-[0.2em] text-white/30 mb-1">Sets</span>
+                <span className="text-6xl font-black italic leading-none">{state.sets[teamIndex]}</span>
               </div>
               <div className="flex flex-col items-center">
-                <span className="text-[10px] uppercase tracking-widest text-white/30 mb-1">Games</span>
-                <span className="text-4xl font-black italic" style={{ color: themeColor }}>{state.games[teamIndex]}</span>
+                <span className="text-xs uppercase tracking-[0.2em] text-white/30 mb-1">Games</span>
+                <span className="text-6xl font-black italic leading-none" style={{ color: themeColor }}>{state.games[teamIndex]}</span>
               </div>
             </div>
 
