@@ -36,6 +36,7 @@ service cloud.firestore {
       return data.points is list && data.points.size() == 2 &&
              data.games is list && data.games.size() == 2 &&
              data.sets is list && data.sets.size() == 2 &&
+             (data.setHistory == null || data.setHistory is list) &&
              data.gameMode in ['padel', 'beach'] &&
              data.teamNames is list && data.teamNames.size() == 2 &&
              data.teamNames[0] is string && data.teamNames[0].size() <= 50 &&
@@ -43,7 +44,8 @@ service cloud.firestore {
              data.bestOf in [1, 3, 5] &&
              data.isGameOver is bool &&
              data.goldenPoint is bool &&
-             data.server in [0, 1];
+             data.server in [0, 1] &&
+             (data.winner == null || data.winner in [0, 1]);
     }
 
     function isAdmin() {

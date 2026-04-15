@@ -19,7 +19,8 @@ import {
   setDoc, 
   onSnapshot, 
   getDoc,
-  serverTimestamp 
+  serverTimestamp,
+  arrayUnion
 } from 'firebase/firestore';
 
 type Score = 0 | 15 | 30 | 40 | 'AD';
@@ -96,6 +97,10 @@ export default function App() {
     if (!matchCode || !user) return;
 
     const unsubscribe = onSnapshot(doc(db, 'matches', matchCode), (snapshot) => {
+      // Ignore updates that originated locally to prevent loops and UI flickering
+      // This ensures we only react to changes from OTHER devices
+      if (snapshot.metadata.hasPendingWrites) return;
+
       if (snapshot.exists()) {
         const data = snapshot.data();
         
@@ -107,7 +112,7 @@ export default function App() {
           setHistory: data.setHistory || [],
           server: data.server,
           isGameOver: data.isGameOver,
-          winner: data.winner,
+          winner: data.winner ?? null,
           gameMode: data.gameMode,
         });
         setTeamNames(data.teamNames);
@@ -333,7 +338,7 @@ export default function App() {
       ...currentState,
       games: [0, 0] as [number, number],
       sets: [...currentState.sets] as [number, number],
-      setHistory: [...currentState.setHistory, [...currentState.games] as [number, number]],
+      setHistory: [...(currentState.setHistory || []), [...currentState.games] as [number, number]],
     };
 
     newState.sets[teamIndex]++;
@@ -344,7 +349,7 @@ export default function App() {
       newState.isGameOver = true;
       newState.winner = teamIndex;
       
-      // Save to finished matches in Firestore
+      // Save to finished matches in Firestore (non-blocking)
       const finishedMatch: FinishedMatch = {
         id: Date.now().toString(),
         date: new Date().toLocaleString('pt-BR'),
@@ -357,8 +362,8 @@ export default function App() {
       if (user) {
         const userRef = doc(db, 'users', user.uid);
         setDoc(userRef, {
-          finishedMatches: [finishedMatch, ...finishedMatches]
-        }, { merge: true });
+          finishedMatches: arrayUnion(finishedMatch)
+        }, { merge: true }).catch(err => console.error("Error saving match to history:", err));
       }
 
       confetti({

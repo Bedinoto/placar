@@ -1,5 +1,5 @@
 {
-  "name": "Padel Scoreboard",
+  "name": "Placar",
   "description": "A large, easy-to-use scoreboard for Padel matches with point tracking, sets, and game history.",
   "requestFramePermissions": [],
   "majorCapabilities": []
