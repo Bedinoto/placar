@@ -335,10 +335,15 @@ export default function App() {
     const gamesTeam = newState.games[teamIndex];
     const gamesOther = newState.games[otherIndex];
 
-    if (gamesTeam >= 6 && gamesTeam - gamesOther >= 2) {
-      winSet(teamIndex, newState);
-    } else if (gamesTeam === 7 && gamesOther === 6) {
-      winSet(teamIndex, newState);
+    // If bestOf is 0, it's Training Mode (Infinite Set)
+    if (bestOf !== 0) {
+      if (gamesTeam >= 6 && gamesTeam - gamesOther >= 2) {
+        winSet(teamIndex, newState);
+      } else if (gamesTeam === 7 && gamesOther === 6) {
+        winSet(teamIndex, newState);
+      } else {
+        updateState(newState);
+      }
     } else {
       updateState(newState);
     }
@@ -765,12 +770,12 @@ export default function App() {
                 {/* Best Of Sets */}
                 <div className="space-y-4">
                   <h3 className="font-bold uppercase text-xs tracking-widest text-white/40">Melhor de</h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[1, 3, 5].map((n) => (
                       <button
                         key={n}
                         onClick={() => setBestOf(n)}
-                        className="py-4 rounded-2xl font-black transition-all"
+                        className="py-4 rounded-2xl font-black transition-all text-xs"
                         style={{ 
                           backgroundColor: bestOf === n ? themeColor : 'rgba(255,255,255,0.05)',
                           color: bestOf === n ? 'black' : 'white'
@@ -779,6 +784,17 @@ export default function App() {
                         {n} SETS
                       </button>
                     ))}
+                    <button
+                      onClick={() => setBestOf(0)}
+                      className="py-4 rounded-2xl font-black transition-all text-xs flex flex-col items-center justify-center leading-tight"
+                      style={{ 
+                        backgroundColor: bestOf === 0 ? themeColor : 'rgba(255,255,255,0.05)',
+                        color: bestOf === 0 ? 'black' : 'white'
+                      }}
+                    >
+                      <span>TREINO</span>
+                      <span className="text-[8px] opacity-60">SET INFINITO</span>
+                    </button>
                   </div>
                 </div>
 
