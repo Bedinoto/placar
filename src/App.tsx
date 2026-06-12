@@ -14,34 +14,14 @@ import {
   onAuthStateChanged, 
   User 
 } from 'firebase/auth';
+import { doc, setDoc, onSnapshot, getDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  getDoc,
-  serverTimestamp,
-  arrayUnion
-} from 'firebase/firestore';
-
-type Score = 0 | 15 | 30 | 40 | 'AD';
-
-interface SetScore {
-  t1: number;
-  t2: number;
-}
-
-interface MatchState {
-  points: [Score, Score];
-  games: [number, number];
-  sets: [number, number];
-  setHistory: SetScore[];
-  server: 0 | 1;
-  isGameOver: boolean;
-  winner: 0 | 1 | null;
-  gameMode: 'padel' | 'beach';
-  createdByEmail?: string;
-  createdById?: string;
-}
+  type Score, 
+  type SetScore, 
+  type MatchState, 
+  processPoint, 
+  getPointCount 
+} from './scoring';
 
 interface FinishedMatch {
   id: string;
@@ -54,15 +34,6 @@ interface FinishedMatch {
 
 const POINT_SEQUENCE: Score[] = [0, 15, 30, 40];
 
-const getPointCount = (score: Score): number => {
-  if (score === 0) return 0;
-  if (score === 15) return 1;
-  if (score === 30) return 2;
-  if (score === 40) return 3;
-  if (score === 'AD') return 4;
-  return 0;
-};
-
 export default function App() {
   const [state, setState] = useState<MatchState>({
     points: [0, 0],
@@ -73,6 +44,9 @@ export default function App() {
     isGameOver: false,
     winner: null,
     gameMode: 'padel',
+    bestOf: 3,
+    goldenPoint: true,
+    teamNames: ['TIME 1', 'TIME 2'],
   });
 
   const [isModeSelected, setIsModeSelected] = useState(false);
@@ -112,17 +86,29 @@ export default function App() {
         const data = snapshot.data();
         
         // Update all state from the database snapshot
-        setState({
-          points: data.points,
-          games: data.games,
-          sets: data.sets,
-          setHistory: data.setHistory || [],
-          server: data.server,
-          isGameOver: data.isGameOver,
-          winner: data.winner ?? null,
-          gameMode: data.gameMode,
-          createdByEmail: data.createdByEmail,
-          createdById: data.createdById,
+        setState((current) => {
+          // If the match game over transitioned to true, trigger confetti!
+          if (data.isGameOver && !current.isGameOver) {
+            confetti({
+              particleCount: 150,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: data.gameMode === 'padel' ? ['#00FF00', '#FFFFFF', '#000000'] : ['#FF6B00', '#FFFFFF', '#000000']
+            });
+          }
+          return {
+            points: data.points,
+            games: data.games,
+            sets: data.sets,
+            setHistory: data.setHistory || [],
+            server: data.server,
+            isGameOver: data.isGameOver,
+            winner: data.winner ?? null,
+            gameMode: data.gameMode,
+            createdByEmail: data.createdByEmail,
+            createdById: data.createdById,
+            undoStack: data.undoStack || [],
+          };
         });
         setTeamNames(data.teamNames);
         setBestOf(data.bestOf);
@@ -235,6 +221,22 @@ export default function App() {
   };
 
   const undo = () => {
+    // If the database document synced an undo stack (e.g., from ESP32 clicks)
+    if (state.undoStack && state.undoStack.length > 0) {
+      const nextUndoStack = [...state.undoStack];
+      const prevState = nextUndoStack.pop() as MatchState;
+      
+      const updatedState = {
+        ...prevState,
+        undoStack: nextUndoStack,
+      };
+      
+      setState(updatedState);
+      syncToFirestore(updatedState, teamNames, bestOf, goldenPoint);
+      return;
+    }
+
+    // Fallback to local memory undo
     if (history.length === 0) return;
     const prevState = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
@@ -264,6 +266,7 @@ export default function App() {
   };
 
   const selectMode = (mode: 'padel' | 'beach') => {
+    const newGoldenPoint = mode === 'beach' ? true : goldenPoint;
     const newState: MatchState = {
       points: [0, 0],
       games: [0, 0],
@@ -273,9 +276,11 @@ export default function App() {
       isGameOver: false,
       winner: null,
       gameMode: mode,
+      bestOf: bestOf,
+      goldenPoint: newGoldenPoint,
+      teamNames: teamNames,
     };
     setState(newState);
-    const newGoldenPoint = mode === 'beach' ? true : goldenPoint;
     setGoldenPoint(newGoldenPoint);
     setIsModeSelected(true);
     setHistory([]);
@@ -287,91 +292,31 @@ export default function App() {
   const handlePoint = (teamIndex: 0 | 1) => {
     if (state.isGameOver) return;
 
-    const otherIndex = teamIndex === 0 ? 1 : 0;
-    const newState = { ...state, points: [...state.points] as [Score, Score] };
-    const currentPoint = state.points[teamIndex];
-    const otherPoint = state.points[otherIndex];
-
-    // Logic for Padel Scoring
-    if (currentPoint === 0) newState.points[teamIndex] = 15;
-    else if (currentPoint === 15) newState.points[teamIndex] = 30;
-    else if (currentPoint === 30) newState.points[teamIndex] = 40;
-    else if (currentPoint === 40) {
-      if (goldenPoint || state.gameMode === 'beach') {
-        // Golden Point Rule (Mandatory for Beach)
-        winGame(teamIndex);
-        return;
-      } else {
-        // Standard Deuce/Ad Rule
-        if (otherPoint === 40) {
-          newState.points[teamIndex] = 'AD';
-        } else if (otherPoint === 'AD') {
-          newState.points[otherIndex] = 40;
-        } else {
-          winGame(teamIndex);
-          return;
-        }
-      }
-    } else if (currentPoint === 'AD') {
-      winGame(teamIndex);
-      return;
+    // Capture state before this point for undo history
+    const { undoStack, ...stateToSave } = state;
+    const currentUndoStack = Array.isArray(state.undoStack) ? [...state.undoStack] : [];
+    
+    currentUndoStack.push(stateToSave);
+    if (currentUndoStack.length > 10) {
+      currentUndoStack.shift();
     }
 
-    updateState(newState);
-  };
-
-  const winGame = (teamIndex: 0 | 1) => {
-    const otherIndex = teamIndex === 0 ? 1 : 0;
-    const newState = {
+    const nextState = processPoint({
       ...state,
-      points: [0, 0] as [Score, Score],
-      games: [...state.games] as [number, number],
-      server: state.server === 0 ? 1 : 0, // Switch server every game
-    };
+      bestOf,
+      goldenPoint,
+      teamNames,
+      undoStack: currentUndoStack,
+    }, teamIndex);
 
-    newState.games[teamIndex]++;
-
-    // Check for Set Win
-    const gamesTeam = newState.games[teamIndex];
-    const gamesOther = newState.games[otherIndex];
-
-    // If bestOf is 0, it's Training Mode (Infinite Set)
-    if (bestOf !== 0) {
-      if (gamesTeam >= 6 && gamesTeam - gamesOther >= 2) {
-        winSet(teamIndex, newState);
-      } else if (gamesTeam === 7 && gamesOther === 6) {
-        winSet(teamIndex, newState);
-      } else {
-        updateState(newState);
-      }
-    } else {
-      updateState(newState);
-    }
-  };
-
-  const winSet = (teamIndex: 0 | 1, currentState: MatchState) => {
-    const newState = {
-      ...currentState,
-      games: [0, 0] as [number, number],
-      sets: [...currentState.sets] as [number, number],
-      setHistory: [...(currentState.setHistory || []), { t1: currentState.games[0], t2: currentState.games[1] }],
-    };
-
-    newState.sets[teamIndex]++;
-
-    // Check for Match Win
-    const setsToWin = Math.ceil(bestOf / 2);
-    if (newState.sets[teamIndex] >= setsToWin) {
-      newState.isGameOver = true;
-      newState.winner = teamIndex;
-      
-      // Save to finished matches in Firestore (non-blocking)
+    // Save to finished matches history if game ends
+    if (nextState.isGameOver && !state.isGameOver) {
       const finishedMatch: FinishedMatch = {
         id: Date.now().toString(),
         date: new Date().toLocaleString('pt-BR'),
         teamNames: [...teamNames] as [string, string],
-        sets: [...newState.sets] as [number, number],
-        setHistory: [...newState.setHistory],
+        sets: [...nextState.sets] as [number, number],
+        setHistory: [...nextState.setHistory],
         winner: teamIndex,
       };
       
@@ -390,7 +335,7 @@ export default function App() {
       });
     }
 
-    updateState(newState);
+    updateState(nextState);
   };
 
   const themeColor = state.gameMode === 'padel' ? '#00FF00' : '#FF6B00';
