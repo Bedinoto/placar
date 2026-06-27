@@ -29,6 +29,13 @@ if (!process.env.VITE_FIREBASE_API_KEY || !process.env.VITE_FIREBASE_PROJECT_ID)
   console.warn("WARNING: Firebase environment variables are missing from process.env. The API routes might fail to contact Firestore.");
 }
 
+const authDomainVal = process.env.VITE_FIREBASE_AUTH_DOMAIN || '';
+if (authDomainVal.toLowerCase().startsWith('aiza')) {
+  console.error("CRITICAL CONFIGURATION ERROR: VITE_FIREBASE_AUTH_DOMAIN is configured with an API Key (starts with AIza...) instead of a valid auth domain (like project.firebaseapp.com). Please fix your environment variables!");
+} else if (authDomainVal && !authDomainVal.includes('.')) {
+  console.warn(`WARNING: VITE_FIREBASE_AUTH_DOMAIN value ("${authDomainVal}") does not appear to be a valid domain.`);
+}
+
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp, process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID);
 

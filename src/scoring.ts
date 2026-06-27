@@ -11,6 +11,7 @@ export interface MatchState {
   sets: [number, number];
   setHistory: SetScore[];
   server: 0 | 1;
+  serverPlayer?: 1 | 2; // 1 for Player 1, 2 for Player 2
   isGameOver: boolean;
   winner: 0 | 1 | null;
   gameMode: 'padel' | 'beach';
@@ -85,15 +86,26 @@ export function processPoint(state: MatchState, teamIndex: 0 | 1): MatchState {
 // Internal function to process winning a game
 function processGameWin(state: MatchState, teamIndex: 0 | 1): MatchState {
   const otherIndex = teamIndex === 0 ? 1 : 0;
+  const nextServer = state.server === 0 ? 1 : 0;
   
   const newState: MatchState = {
     ...state,
     points: [0, 0] as [Score, Score],
     games: [...state.games] as [number, number],
-    server: state.server === 0 ? 1 : 0, // Switch server every game
+    server: nextServer, // Switch server every game
   };
 
   newState.games[teamIndex]++;
+
+  // Calculate the serving player for the newly serving team (nextServer)
+  const totalGames = newState.games[0] + newState.games[1];
+  if (nextServer === 0) {
+    const term = Math.floor(totalGames / 2);
+    newState.serverPlayer = (term % 2 === 0) ? 2 : 1;
+  } else {
+    const term = Math.floor((totalGames - 1) / 2);
+    newState.serverPlayer = (term % 2 === 0) ? 2 : 1;
+  }
 
   const gamesTeam = newState.games[teamIndex];
   const gamesOther = newState.games[otherIndex];
@@ -118,6 +130,7 @@ function processSetWin(state: MatchState, teamIndex: 0 | 1): MatchState {
       ...(state.setHistory || []),
       { t1: state.games[0], t2: state.games[1] }
     ],
+    serverPlayer: 2,
   };
 
   newState.sets[teamIndex]++;

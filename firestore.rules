@@ -66,12 +66,12 @@ service cloud.firestore {
     }
 
     match /matches/{matchId} {
-      // Allow any authenticated user to read/write matches if they have the ID
-      // In a real app, we might want to restrict this to creators, but for a shared scoreboard,
-      // anyone with the code should be able to participate.
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidMatch(request.resource.data);
-      allow update: if isAuthenticated() && isValidMatch(request.resource.data);
+      // Allow anyone with the match code to read, create and update a match.
+      // This enables unauthenticated scoreboards (like TV screens) and backend APIs (like ESP32)
+      // to synchronize without requiring an active user session.
+      allow read: if true;
+      allow create: if isValidMatch(request.resource.data);
+      allow update: if isValidMatch(request.resource.data);
       allow delete: if isAdmin();
     }
   }
